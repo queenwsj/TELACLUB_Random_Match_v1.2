@@ -255,13 +255,16 @@ if st.sidebar.button("대진표 생성", type="primary"):
     data = generate_schedule(am, aw, bm, bw)
     
     # 데이터프레임 변환 (화면 표시용)
+    # [수정된 부분] 팀1, 팀2를 각각 2개의 칸으로 분리
     display_data = []
     for d in data:
         display_data.append({
             "라운드": d["round"],
             "리그": d["league"],
-            "팀 1 (Left)": f"{d['team1'][0]}, {d['team1'][1]}",
-            "팀 2 (Right)": f"{d['team2'][0]}, {d['team2'][1]}",
+            "팀1 (1)": d['team1'][0],
+            "팀1 (2)": d['team1'][1],
+            "팀2 (1)": d['team2'][0],
+            "팀2 (2)": d['team2'][1],
             "비고": d["note"]
         })
     df_matches = pd.DataFrame(display_data)
