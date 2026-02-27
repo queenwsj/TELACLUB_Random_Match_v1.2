@@ -284,7 +284,7 @@ def calculate_stats(schedule_data):
 # ==========================================
 st.set_page_config(page_title="TELA Tennis Match", page_icon="🎾", layout="wide")
 
-st.title("🎾 TELA CLUB Random Match")
+st.title("🎾 TELA CLUB Random Match_v1.4(web)")
 st.markdown("모바일/PC 어디서든 사용 가능한 랜덤 매치 생성기입니다. (3경기 보장 / 4경기 제한)")
 
 # 사이드바 입력
