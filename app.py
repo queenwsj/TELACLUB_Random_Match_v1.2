@@ -99,22 +99,23 @@ def build_groups_by_priority(pool_sorted_by_priority, max_groups=None):
     groups = []
 
     # 1순위: 잡복이 없는 이상적인 구성 (혼복, 남복, 여복) 우선 배치
+    # pop(0)을 사용하여 리스트의 '앞쪽(경기를 가장 적게 뛴 사람)'부터 최우선으로 뽑습니다.
     while len(groups) < max_groups:
         if len(men) >= 2 and len(women) >= 2:
-            groups.append([men.pop(), men.pop(), women.pop(), women.pop()])
+            groups.append([men.pop(0), men.pop(0), women.pop(0), women.pop(0)])
         elif len(men) >= 4:
-            groups.append([men.pop() for _ in range(4)])
+            groups.append([men.pop(0) for _ in range(4)])
         elif len(women) >= 4:
-            groups.append([women.pop() for _ in range(4)])
+            groups.append([women.pop(0) for _ in range(4)])
         else:
             break
             
     # 2순위: 남은 인원으로 어쩔 수 없이 잡복을 구성
     while len(groups) < max_groups:
         if len(men) >= 3 and len(women) >= 1:
-            groups.append([men.pop(), men.pop(), men.pop(), women.pop()])
+            groups.append([men.pop(0), men.pop(0), men.pop(0), women.pop(0)])
         elif len(women) >= 3 and len(men) >= 1:
-            groups.append([women.pop(), women.pop(), women.pop(), men.pop()])
+            groups.append([women.pop(0), women.pop(0), women.pop(0), men.pop(0)])
         else:
             combined = men + women + unknown
             if len(combined) >= 4:
@@ -232,6 +233,7 @@ def generate_schedule(am, aw, bm, bw):
             round_teammate_used = set(); round_opponent_used = set(); round_mixed_partner_used = set()
             order = players[:]
             random.shuffle(order)
+            # 경기를 가장 적게 뛴 순서(오름차순)로 정렬합니다.
             order.sort(key=lambda x: usage.get(x, 0))
             
             round_matches, _ = make_matches(order, teammate_used, opponent_used, mixed_partner_used, round_teammate_used, round_opponent_used, round_mixed_partner_used)
@@ -284,7 +286,7 @@ def calculate_stats(schedule_data):
 # ==========================================
 st.set_page_config(page_title="TELA Tennis Match", page_icon="🎾", layout="wide")
 
-st.title("🎾 TELA CLUB Random Match_v1.4(web)")
+st.title("🎾 TELA CLUB Random Match_Wep(v1.4)")
 st.markdown("모바일/PC 어디서든 사용 가능한 랜덤 매치 생성기입니다. (3경기 보장 / 4경기 제한)")
 
 # 사이드바 입력
