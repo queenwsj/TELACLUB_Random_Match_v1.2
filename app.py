@@ -99,7 +99,6 @@ def build_groups_by_priority(pool_sorted_by_priority, max_groups=None):
     groups = []
 
     # 1순위: 잡복이 없는 이상적인 구성 (혼복, 남복, 여복) 우선 배치
-    # pop(0)을 사용하여 리스트의 '앞쪽(경기를 가장 적게 뛴 사람)'부터 최우선으로 뽑습니다.
     while len(groups) < max_groups:
         if len(men) >= 2 and len(women) >= 2:
             groups.append([men.pop(0), men.pop(0), women.pop(0), women.pop(0)])
@@ -233,7 +232,6 @@ def generate_schedule(am, aw, bm, bw):
             round_teammate_used = set(); round_opponent_used = set(); round_mixed_partner_used = set()
             order = players[:]
             random.shuffle(order)
-            # 경기를 가장 적게 뛴 순서(오름차순)로 정렬합니다.
             order.sort(key=lambda x: usage.get(x, 0))
             
             round_matches, _ = make_matches(order, teammate_used, opponent_used, mixed_partner_used, round_teammate_used, round_opponent_used, round_mixed_partner_used)
@@ -286,7 +284,7 @@ def calculate_stats(schedule_data):
 # ==========================================
 st.set_page_config(page_title="TELA Tennis Match", page_icon="🎾", layout="wide")
 
-st.title("🎾 TELA CLUB Random Match_Web(v1.4)")
+st.title("🎾 TELA CLUB Random Match")
 st.markdown("모바일/PC 어디서든 사용 가능한 랜덤 매치 생성기입니다. (3경기 보장 / 4경기 제한)")
 
 # 사이드바 입력
@@ -302,14 +300,16 @@ with col2:
 if st.sidebar.button("대진표 생성", type="primary"):
     data = generate_schedule(am, aw, bm, bw)
     
-    # 데이터프레임 변환 (화면 표시용)
+    # 📌 여기서 4개의 열로 분리합니다 (UI 화면 및 엑셀 다운로드 공통 적용)
     display_data = []
     for d in data:
         display_data.append({
             "라운드": d["round"],
             "리그": d["league"],
-            "팀 1 (Left)": f"{d['team1'][0]}, {d['team1'][1]}",
-            "팀 2 (Right)": f"{d['team2'][0]}, {d['team2'][1]}",
+            "팀1(1)": d['team1'][0],
+            "팀1(2)": d['team1'][1],
+            "팀2(1)": d['team2'][0],
+            "팀2(2)": d['team2'][1],
             "비고": d["note"]
         })
     df_matches = pd.DataFrame(display_data)
