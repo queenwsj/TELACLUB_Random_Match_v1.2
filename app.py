@@ -89,44 +89,60 @@ def best_pairing_of_four(players4, teammate_used, opponent_used, mixed_partner_u
     return best
 
 def build_groups_by_priority(pool_sorted_by_priority, max_groups=None):
-    men = [p for p in pool_sorted_by_priority if get_gender(p) == "M"]
-    women = [p for p in pool_sorted_by_priority if get_gender(p) == "W"]
-    unknown = [p for p in pool_sorted_by_priority if get_gender(p) == "U"]
-    
     if max_groups is None:
         max_groups = len(pool_sorted_by_priority) // 4
         
     groups = []
+    pool = pool_sorted_by_priority.copy()
 
-    # 1순위: 잡복이 없는 이상적인 구성 (혼복, 남복, 여복) 우선 배치
-    while len(groups) < max_groups:
-        if len(men) >= 2 and len(women) >= 2:
-            groups.append([men.pop(0), men.pop(0), women.pop(0), women.pop(0)])
-        elif len(men) >= 4:
-            groups.append([men.pop(0) for _ in range(4)])
-        elif len(women) >= 4:
-            groups.append([women.pop(0) for _ in range(4)])
-        else:
-            break
-            
-    # 2순위: 남은 인원으로 어쩔 수 없이 잡복을 구성
-    while len(groups) < max_groups:
-        if len(men) >= 3 and len(women) >= 1:
-            groups.append([men.pop(0), men.pop(0), men.pop(0), women.pop(0)])
-        elif len(women) >= 3 and len(men) >= 1:
-            groups.append([women.pop(0), women.pop(0), women.pop(0), men.pop(0)])
-        else:
-            combined = men + women + unknown
-            if len(combined) >= 4:
-                g = [combined.pop(0) for _ in range(4)]
-                groups.append(g)
-                men = [x for x in combined if get_gender(x) == "M"]
-                women = [x for x in combined if get_gender(x) == "W"]
-                unknown = [x for x in combined if get_gender(x) == "U"]
+    while len(groups) < max_groups and len(pool) >= 4:
+        # 1. 출전이 가장 시급한 선수(리스트 첫 번째)를 기둥(Anchor)으로 무조건 꽂습니다.
+        anchor = pool.pop(0)
+        g_anchor = get_gender(anchor)
+        
+        group = [anchor]
+        
+        men = [p for p in pool if get_gender(p) == "M"]
+        women = [p for p in pool if get_gender(p) == "W"]
+        
+        def extract_players(p_list, count):
+            extracted = []
+            for _ in range(count):
+                if p_list:
+                    p = p_list.pop(0)
+                    extracted.append(p)
+                    if p in pool:
+                        pool.remove(p)
+            return extracted
+
+        # 2. 기둥 선수의 성별에 맞춰 이상적인 파트너들을 순서대로 데려옵니다.
+        if g_anchor == "M":
+            if len(men) >= 3:
+                group.extend(extract_players(men, 3)) # 4M 완성
+            elif len(men) >= 1 and len(women) >= 2:
+                group.extend(extract_players(men, 1))
+                group.extend(extract_players(women, 2)) # 2M2W 완성
+            elif len(women) >= 3:
+                group.extend(extract_players(women, 3)) # 잡복(1M3W)
             else:
-                break
+                group.extend(extract_players(pool, 3))
                 
-    leftovers = men + women + unknown
+        elif g_anchor == "W":
+            if len(women) >= 3:
+                group.extend(extract_players(women, 3)) # 4W 완성
+            elif len(women) >= 1 and len(men) >= 2:
+                group.extend(extract_players(women, 1))
+                group.extend(extract_players(men, 2)) # 2M2W 완성
+            elif len(men) >= 3:
+                group.extend(extract_players(men, 3)) # 잡복(3M1W)
+            else:
+                group.extend(extract_players(pool, 3))
+        else:
+            group.extend(extract_players(pool, 3))
+
+        groups.append(group)
+        
+    leftovers = pool
     return groups, leftovers
 
 def make_matches(pool, teammate_used, opponent_used, mixed_partner_used, round_teammate_used, round_opponent_used, round_mixed_partner_used):
@@ -284,7 +300,7 @@ def calculate_stats(schedule_data):
 # ==========================================
 st.set_page_config(page_title="TELA Tennis Match", page_icon="🎾", layout="wide")
 
-st.title("🎾 TELA CLUB Random Match_Web(v1.4)")
+st.title("🎾 TELA CLUB Random Match")
 st.markdown("모바일/PC 어디서든 사용 가능한 랜덤 매치 생성기입니다. (3경기 보장 / 4경기 제한)")
 
 # 사이드바 입력
@@ -300,7 +316,7 @@ with col2:
 if st.sidebar.button("대진표 생성", type="primary"):
     data = generate_schedule(am, aw, bm, bw)
     
-    # 📌 여기서 4개의 열로 분리합니다 (UI 화면 및 엑셀 다운로드 공통 적용)
+    # 데이터프레임 변환 (화면 표시용)
     display_data = []
     for d in data:
         display_data.append({
