@@ -5,7 +5,7 @@ import math
 import io
 
 # ==========================================
-# 1. 로직 엔진 (기존 로직 100% 동일)
+# 1. 로직 엔진
 # ==========================================
 def base_name(p: str) -> str:
     return p.split("(")[0].strip()
@@ -88,26 +88,51 @@ def best_pairing_of_four(players4, teammate_used, opponent_used, mixed_partner_u
         if s < best_s: best_s = s; best = (t1, t2)
     return best
 
-def build_groups_by_priority(pool):
-    men = [p for p in pool if get_gender(p) == "M"]
-    women = [p for p in pool if get_gender(p) == "W"]
-    unknown = [p for p in pool if get_gender(p) == "U"]
-    random.shuffle(men); random.shuffle(women); random.shuffle(unknown)
+def build_groups_by_priority(pool_sorted_by_priority, max_groups=None):
+    men = [p for p in pool_sorted_by_priority if get_gender(p) == "M"]
+    women = [p for p in pool_sorted_by_priority if get_gender(p) == "W"]
+    unknown = [p for p in pool_sorted_by_priority if get_gender(p) == "U"]
+    
+    if max_groups is None:
+        max_groups = len(pool_sorted_by_priority) // 4
+        
     groups = []
-    while len(men) >= 4: groups.append([men.pop() for _ in range(4)])
-    while len(women) >= 4: groups.append([women.pop() for _ in range(4)])
-    while len(men) >= 2 and len(women) >= 2: groups.append([men.pop(), men.pop(), women.pop(), women.pop()])
-    while len(men) >= 3 and len(women) >= 1: groups.append([men.pop(), men.pop(), men.pop(), women.pop()])
-    while len(women) >= 3 and len(men) >= 1: groups.append([women.pop(), women.pop(), women.pop(), men.pop()])
+
+    # 1순위: 잡복이 없는 이상적인 구성 (혼복, 남복, 여복) 우선 배치
+    while len(groups) < max_groups:
+        if len(men) >= 2 and len(women) >= 2:
+            groups.append([men.pop(), men.pop(), women.pop(), women.pop()])
+        elif len(men) >= 4:
+            groups.append([men.pop() for _ in range(4)])
+        elif len(women) >= 4:
+            groups.append([women.pop() for _ in range(4)])
+        else:
+            break
+            
+    # 2순위: 남은 인원으로 어쩔 수 없이 잡복을 구성
+    while len(groups) < max_groups:
+        if len(men) >= 3 and len(women) >= 1:
+            groups.append([men.pop(), men.pop(), men.pop(), women.pop()])
+        elif len(women) >= 3 and len(men) >= 1:
+            groups.append([women.pop(), women.pop(), women.pop(), men.pop()])
+        else:
+            combined = men + women + unknown
+            if len(combined) >= 4:
+                g = [combined.pop(0) for _ in range(4)]
+                groups.append(g)
+                men = [x for x in combined if get_gender(x) == "M"]
+                women = [x for x in combined if get_gender(x) == "W"]
+                unknown = [x for x in combined if get_gender(x) == "U"]
+            else:
+                break
+                
     leftovers = men + women + unknown
     return groups, leftovers
 
 def make_matches(pool, teammate_used, opponent_used, mixed_partner_used, round_teammate_used, round_opponent_used, round_mixed_partner_used):
     matches = []
     groups, leftovers = build_groups_by_priority(pool)
-    if len(leftovers) >= 4:
-        while len(leftovers) >= 4: groups.append([leftovers.pop() for _ in range(4)])
-
+    
     for g in groups:
         random.shuffle(g)
         t1, t2 = best_pairing_of_four(g, teammate_used, opponent_used, mixed_partner_used, round_teammate_used, round_opponent_used, round_mixed_partner_used)
@@ -127,10 +152,22 @@ def build_event_games(players, usage, min_games=3, max_games=4):
     if total_slots == 0: return []
 
     def pick_filler():
+        current_m = sum(v for p, v in add.items() if get_gender(p) == "M")
+        current_w = sum(v for p, v in add.items() if get_gender(p) == "W")
+        pref = None
+        if current_m % 2 != 0: pref = "M"
+        elif current_w % 2 != 0: pref = "W"
+
         cands1 = [p for p in players if add[p] == 0 and room[p] > add[p]]
-        if cands1: cands1.sort(key=lambda x: (usage[x], random.random())); return cands1[0]
+        if cands1:
+            cands1.sort(key=lambda x: (0 if get_gender(x) == pref else 1, usage[x], random.random()))
+            return cands1[0]
+            
         cands2 = [p for p in players if room[p] > add[p]]
-        if cands2: cands2.sort(key=lambda x: (usage[x], random.random())); return cands2[0]
+        if cands2:
+            cands2.sort(key=lambda x: (0 if get_gender(x) == pref else 1, usage[x], random.random()))
+            return cands2[0]
+            
         return None
 
     while sum(1 for p in players if add[p] > 0) < 4:
@@ -148,23 +185,35 @@ def build_event_games(players, usage, min_games=3, max_games=4):
     while True:
         active = [p for p in players if remaining[p] > 0]
         if not active or len(active) < 4: break
+        
         active.sort(key=lambda x: (-remaining[x], usage[x], random.random()))
-        chosen = active[:4]
+        
+        groups, _ = build_groups_by_priority(active, max_groups=1)
+        if groups:
+            chosen = groups[0]
+        else:
+            chosen = active[:4]
+            
         for p in chosen: remaining[p] -= 1
         games.append(chosen)
     return games
 
-def decorate_event_games(games):
-    seen = {}
+def decorate_event_games(games, usage, min_games=3):
+    current_usage = usage.copy()
     decorated_games = []
+    
     for g in games:
         dg = []
         for p in g:
-            seen[p] = seen.get(p, 0) + 1
-            if seen[p] >= 2: dg.append(p + "(중복)")
-            else: dg.append(p)
+            current_usage[p] = current_usage.get(p, 0) + 1
+            if current_usage[p] > min_games:
+                dg.append(p + "(중복)")
+            else:
+                dg.append(p)
+                
         random.shuffle(dg)
         decorated_games.append(dg)
+        
     return decorated_games
 
 def generate_schedule(am, aw, bm, bw):
@@ -185,10 +234,7 @@ def generate_schedule(am, aw, bm, bw):
             random.shuffle(order)
             order.sort(key=lambda x: usage.get(x, 0))
             
-            capacity = (len(order) // 4) * 4
-            participants = order[:capacity]
-            
-            round_matches, _ = make_matches(participants, teammate_used, opponent_used, mixed_partner_used, round_teammate_used, round_opponent_used, round_mixed_partner_used)
+            round_matches, _ = make_matches(order, teammate_used, opponent_used, mixed_partner_used, round_teammate_used, round_opponent_used, round_mixed_partner_used)
             
             for m in round_matches:
                 t1, t2 = m["team1"], m["team2"]
@@ -196,7 +242,7 @@ def generate_schedule(am, aw, bm, bw):
                 results.append({"round": f"{r}R", "league": f"{league_name}리그", "team1": t1, "team2": t2, "note": m["type"]})
 
         games = build_event_games(players, usage)
-        games = decorate_event_games(games)
+        games = decorate_event_games(games, usage)
         if games:
             round_teammate_used = set(); round_opponent_used = set(); round_mixed_partner_used = set()
             for g in games:
@@ -255,16 +301,13 @@ if st.sidebar.button("대진표 생성", type="primary"):
     data = generate_schedule(am, aw, bm, bw)
     
     # 데이터프레임 변환 (화면 표시용)
-    # [수정된 부분] 팀1, 팀2를 각각 2개의 칸으로 분리
     display_data = []
     for d in data:
         display_data.append({
             "라운드": d["round"],
             "리그": d["league"],
-            "팀1 (1)": d['team1'][0],
-            "팀1 (2)": d['team1'][1],
-            "팀2 (1)": d['team2'][0],
-            "팀2 (2)": d['team2'][1],
+            "팀 1 (Left)": f"{d['team1'][0]}, {d['team1'][1]}",
+            "팀 2 (Right)": f"{d['team2'][0]}, {d['team2'][1]}",
             "비고": d["note"]
         })
     df_matches = pd.DataFrame(display_data)
