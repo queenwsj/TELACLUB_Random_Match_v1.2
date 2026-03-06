@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import random
@@ -123,7 +122,7 @@ def build_groups_by_priority(pool, mixed_usage, max_groups=None):
                         pool_copy.remove(p)
             return extracted
 
-        # 2. 📌 유저 요청사항 반영: 무조건 [동성복 > 혼복 > 잡복] 순으로 엄격하게 우선순위 적용
+        # 2. 무조건 [동성복 > 혼복 > 잡복] 순으로 엄격하게 우선순위 적용
         choice = None
         if g_anchor == "M":
             if len(men) >= 3:
@@ -325,20 +324,33 @@ def calculate_stats(schedule_data):
         for p_raw in (t1 + t2):
             p_name = base_name(p_raw)
             if p_name not in stats:
-                stats[p_name] = {"League": league, "1R": "-", "2R": "-", "3R": "-", "4R": "-", "Total": 0}
+                # 📌 남복, 여복, 혼복, 잡복 카운트용 변수 추가
+                stats[p_name] = {
+                    "League": league, 
+                    "1R": "-", "2R": "-", "3R": "-", "4R": "-", 
+                    "남복": 0, "여복": 0, "혼복": 0, "잡복": 0,
+                    "Total": 0
+                }
             
             if "1R" in r_num: stats[p_name]["1R"] = match_type
             elif "2R" in r_num: stats[p_name]["2R"] = match_type
             elif "3R" in r_num: stats[p_name]["3R"] = match_type
             elif "4R" in r_num: stats[p_name]["4R"] = match_type
             
+            # 📌 횟수 증가 로직
+            if match_type in ["남복", "여복", "혼복", "잡복"]:
+                stats[p_name][match_type] += 1
+                
             stats[p_name]["Total"] += 1
     
     data = []
     for name, info in stats.items():
         data.append({
             "리그": info["League"], "이름": name, 
-            "1R": info["1R"], "2R": info["2R"], "3R": info["3R"], "4R": info["4R"], "총합": info["Total"]
+            "1R": info["1R"], "2R": info["2R"], "3R": info["3R"], "4R": info["4R"], 
+            # 📌 새로 생성한 4개의 열을 '총합' 앞에 배치
+            "남복": info["남복"], "여복": info["여복"], "혼복": info["혼복"], "잡복": info["잡복"], 
+            "총합": info["Total"]
         })
     return pd.DataFrame(data).sort_values(by=["리그", "이름"])
 
@@ -347,7 +359,7 @@ def calculate_stats(schedule_data):
 # ==========================================
 st.set_page_config(page_title="TELA Tennis Match", page_icon="🎾", layout="wide")
 
-st.title("🎾 TELA CLUB Random Match_WEB(v1.08)")
+st.title("🎾 TELA CLUB Random Match_WEB(v1.09)")
 st.markdown("모바일/PC 어디서든 사용 가능한 랜덤 매치 생성기입니다. (3경기 보장 / 4경기 제한)")
 
 # 사이드바 입력
