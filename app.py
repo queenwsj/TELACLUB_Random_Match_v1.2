@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import random
@@ -290,7 +291,6 @@ def generate_schedule(am, aw, bm, bw):
                 
     return results
 
-# 📌 텍스트('남복', '혼복' 등)로 표시되도록 계산 로직 업데이트
 def calculate_stats(schedule_data):
     stats = {}
     for row in schedule_data:
@@ -304,7 +304,7 @@ def calculate_stats(schedule_data):
         for p_raw in (t1 + t2):
             p_name = base_name(p_raw)
             if p_name not in stats:
-                # 안 뛴 라운드는 '-'로 깔끔하게 초기화
+                # 안 뛴 라운드는 '-'로 초기화
                 stats[p_name] = {"League": league, "1R": "-", "2R": "-", "3R": "-", "4R": "-", "Total": 0}
             
             if "1R" in r_num: stats[p_name]["1R"] = match_type
@@ -373,7 +373,7 @@ if st.sidebar.button("대진표 생성", type="primary"):
         st.subheader("선수별 출전 기록")
         df_stats = calculate_stats(data)
         
-        # 총합 색상 표시 기능은 유지
+        # 총합 색상 표시 기능
         def highlight_stats(val):
             if isinstance(val, int):
                 if val < 3: return 'background-color: #FFCDD2; color: black'
