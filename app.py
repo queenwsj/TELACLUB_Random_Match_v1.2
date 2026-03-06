@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import random
@@ -96,7 +97,7 @@ def build_groups_by_priority(pool, mixed_usage, max_groups=None):
     pool_copy = pool.copy()
 
     while len(groups) < max_groups and len(pool_copy) >= 4:
-        # 1. 출전이 가장 시급한(0순위) 선수를 무조건 매치의 기둥(Anchor)으로 세웁니다.
+        # 1. 출전이 가장 시급한 선수를 기둥(Anchor)으로 세웁니다.
         anchor = pool_copy.pop(0)
         g_anchor = get_gender(anchor)
         
@@ -107,10 +108,10 @@ def build_groups_by_priority(pool, mixed_usage, max_groups=None):
         
         def extract_players(p_list, count, is_mixed_target):
             if is_mixed_target:
-                # 혼성 경기면 혼복 경험 적은 순, 그 다음 출전 적은 순
+                # 혼성 경기면 혼복 경험 적은 순 우선
                 p_list.sort(key=lambda x: (mixed_usage.get(base_name(x), 0), pool.index(x)))
             else:
-                # 동성 경기면 순수하게 전체 출전 적은 순
+                # 동성 경기면 순수하게 전체 출전 적은 순 우선
                 p_list.sort(key=lambda x: pool.index(x))
                 
             extracted = []
@@ -122,30 +123,39 @@ def build_groups_by_priority(pool, mixed_usage, max_groups=None):
                         pool_copy.remove(p)
             return extracted
 
-        # 2. 기둥 선수의 성별에 맞춰 최적의 파트너들을 데려옵니다.
+        # 2. 📌 유저 요청사항 반영: 무조건 [동성복 > 혼복 > 잡복] 순으로 엄격하게 우선순위 적용
+        choice = None
         if g_anchor == "M":
-            if len(men) >= 1 and len(women) >= 2:
+            if len(men) >= 3:
+                choice = "M4"  # 1순위: 남복
+            elif len(men) >= 1 and len(women) >= 2:
+                choice = "M2W2" # 2순위: 혼복
+        elif g_anchor == "W":
+            if len(women) >= 3:
+                choice = "W4"  # 1순위: 여복
+            elif len(women) >= 1 and len(men) >= 2:
+                choice = "M2W2" # 2순위: 혼복
+
+        # 3. 결정된 매치 타입에 맞춰 선수 투입
+        if choice == "M4":
+            group.extend(extract_players(men, 3, False))
+        elif choice == "W4":
+            group.extend(extract_players(women, 3, False))
+        elif choice == "M2W2":
+            if g_anchor == "M":
                 group.extend(extract_players(men, 1, True))
                 group.extend(extract_players(women, 2, True))
-            elif len(men) >= 3:
-                group.extend(extract_players(men, 3, False))
-            elif len(women) >= 3:
-                group.extend(extract_players(women, 3, True))
             else:
-                group.extend(extract_players(pool_copy, 3, True))
-                
-        elif g_anchor == "W":
-            if len(women) >= 1 and len(men) >= 2:
                 group.extend(extract_players(women, 1, True))
                 group.extend(extract_players(men, 2, True))
-            elif len(women) >= 3:
-                group.extend(extract_players(women, 3, False))
-            elif len(men) >= 3:
+        else:
+            # 3순위: 동성복/혼복 모두 수학적으로 불가능할 때만 어쩔 수 없이 잡복(Fallback) 구성
+            if g_anchor == "M" and len(women) >= 3:
+                group.extend(extract_players(women, 3, True))
+            elif g_anchor == "W" and len(men) >= 3:
                 group.extend(extract_players(men, 3, True))
             else:
                 group.extend(extract_players(pool_copy, 3, True))
-        else:
-            group.extend(extract_players(pool_copy, 3, True))
 
         groups.append(group)
         
@@ -337,7 +347,7 @@ def calculate_stats(schedule_data):
 # ==========================================
 st.set_page_config(page_title="TELA Tennis Match", page_icon="🎾", layout="wide")
 
-st.title("🎾 TELA CLUB Random Match_WEB(v1.06)")
+st.title("🎾 TELA CLUB Random Match_WEB(v1.08)")
 st.markdown("모바일/PC 어디서든 사용 가능한 랜덤 매치 생성기입니다. (3경기 보장 / 4경기 제한)")
 
 # 사이드바 입력
