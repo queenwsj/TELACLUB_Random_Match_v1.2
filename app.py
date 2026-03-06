@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import random
@@ -96,7 +97,6 @@ def build_groups_by_priority(pool, mixed_usage, max_groups=None):
     pool_copy = pool.copy()
 
     while len(groups) < max_groups and len(pool_copy) >= 4:
-        # 1. 출전이 가장 시급한 선수를 기둥(Anchor)으로 세웁니다.
         anchor = pool_copy.pop(0)
         g_anchor = get_gender(anchor)
         
@@ -107,10 +107,8 @@ def build_groups_by_priority(pool, mixed_usage, max_groups=None):
         
         def extract_players(p_list, count, is_mixed_target):
             if is_mixed_target:
-                # 혼성 경기면 혼복 경험 적은 순 우선
                 p_list.sort(key=lambda x: (mixed_usage.get(base_name(x), 0), pool.index(x)))
             else:
-                # 동성 경기면 순수하게 전체 출전 적은 순 우선
                 p_list.sort(key=lambda x: pool.index(x))
                 
             extracted = []
@@ -122,20 +120,19 @@ def build_groups_by_priority(pool, mixed_usage, max_groups=None):
                         pool_copy.remove(p)
             return extracted
 
-        # 2. 무조건 [동성복 > 혼복 > 잡복] 순으로 엄격하게 우선순위 적용
+        # 무조건 [동성복 > 혼복 > 잡복] 순으로 엄격하게 우선순위 적용
         choice = None
         if g_anchor == "M":
             if len(men) >= 3:
-                choice = "M4"  # 1순위: 남복
+                choice = "M4"  
             elif len(men) >= 1 and len(women) >= 2:
-                choice = "M2W2" # 2순위: 혼복
+                choice = "M2W2" 
         elif g_anchor == "W":
             if len(women) >= 3:
-                choice = "W4"  # 1순위: 여복
+                choice = "W4"  
             elif len(women) >= 1 and len(men) >= 2:
-                choice = "M2W2" # 2순위: 혼복
+                choice = "M2W2" 
 
-        # 3. 결정된 매치 타입에 맞춰 선수 투입
         if choice == "M4":
             group.extend(extract_players(men, 3, False))
         elif choice == "W4":
@@ -148,7 +145,6 @@ def build_groups_by_priority(pool, mixed_usage, max_groups=None):
                 group.extend(extract_players(women, 1, True))
                 group.extend(extract_players(men, 2, True))
         else:
-            # 3순위: 동성복/혼복 모두 수학적으로 불가능할 때만 어쩔 수 없이 잡복(Fallback) 구성
             if g_anchor == "M" and len(women) >= 3:
                 group.extend(extract_players(women, 3, True))
             elif g_anchor == "W" and len(men) >= 3:
@@ -324,7 +320,6 @@ def calculate_stats(schedule_data):
         for p_raw in (t1 + t2):
             p_name = base_name(p_raw)
             if p_name not in stats:
-                # 📌 남복, 여복, 혼복, 잡복 카운트용 변수 추가
                 stats[p_name] = {
                     "League": league, 
                     "1R": "-", "2R": "-", "3R": "-", "4R": "-", 
@@ -337,7 +332,6 @@ def calculate_stats(schedule_data):
             elif "3R" in r_num: stats[p_name]["3R"] = match_type
             elif "4R" in r_num: stats[p_name]["4R"] = match_type
             
-            # 📌 횟수 증가 로직
             if match_type in ["남복", "여복", "혼복", "잡복"]:
                 stats[p_name][match_type] += 1
                 
@@ -348,7 +342,6 @@ def calculate_stats(schedule_data):
         data.append({
             "리그": info["League"], "이름": name, 
             "1R": info["1R"], "2R": info["2R"], "3R": info["3R"], "4R": info["4R"], 
-            # 📌 새로 생성한 4개의 열을 '총합' 앞에 배치
             "남복": info["남복"], "여복": info["여복"], "혼복": info["혼복"], "잡복": info["잡복"], 
             "총합": info["Total"]
         })
@@ -412,7 +405,8 @@ if st.sidebar.button("대진표 생성", type="primary"):
                 if val >= 4: return 'background-color: #FFF9C4; color: black'
             return ''
 
-        st.dataframe(df_stats.style.applymap(highlight_stats, subset=["총합"]), use_container_width=True)
+        # 표 높이를 700으로 늘려 스크롤을 시원하게 해결했습니다.
+        st.dataframe(df_stats.style.applymap(highlight_stats, subset=["총합"]), use_container_width=True, height=700)
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
