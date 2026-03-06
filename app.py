@@ -95,7 +95,6 @@ def build_groups_by_priority(pool, mixed_usage, max_groups=None):
     pool_copy = pool.copy()
     groups = []
     
-    # 이상적인 매치 구성 (혼복 > 남복/여복 > 잡복) 순으로 그룹을 짭니다.
     while len(groups) < max_groups and len(pool_copy) >= 4:
         men = [p for p in pool_copy if get_gender(p) == "M"]
         women = [p for p in pool_copy if get_gender(p) == "W"]
@@ -103,7 +102,6 @@ def build_groups_by_priority(pool, mixed_usage, max_groups=None):
         group = []
         is_mixed = False
         
-        # 1. 구성할 매치 타입 결정
         if len(men) >= 2 and len(women) >= 2:
             req_m, req_w = 2, 2
             is_mixed = True
@@ -118,19 +116,15 @@ def build_groups_by_priority(pool, mixed_usage, max_groups=None):
             req_m, req_w = 1, 3
             is_mixed = True
         else:
-            # 잔여 인원 무작위 묶음 (Fallback)
             group = pool_copy[:4]
             for p in group: pool_copy.remove(p)
             groups.append(group)
             continue
             
-        # 2. 결정된 매치 타입에 맞게 선수 차출 (혼복/잡복일 경우 혼복 경험 적은 순으로)
         def extract(gender_list, count, mixed_flag):
             if mixed_flag:
-                # 혼성 경기라면: 1순위 혼복 횟수(오름차순), 2순위 전체 출전 우선순위
                 gender_list.sort(key=lambda x: (mixed_usage.get(base_name(x), 0), pool.index(x)))
             else:
-                # 동성 경기라면: 순수 전체 출전 우선순위만 고려
                 gender_list.sort(key=lambda x: pool.index(x))
                 
             extracted = gender_list[:count]
@@ -242,7 +236,7 @@ def generate_schedule(am, aw, bm, bw):
     for league_name, players in leagues.items():
         if not players: continue
         usage = {p: 0 for p in players}
-        mixed_usage = {p: 0 for p in players} # 📌 혼성 매치 횟수 추적기 추가
+        mixed_usage = {p: 0 for p in players}
         teammate_used = set(); opponent_used = set(); mixed_partner_used = set()
 
         for r in range(1, 4):
@@ -257,7 +251,6 @@ def generate_schedule(am, aw, bm, bw):
                 t1, t2 = m["team1"], m["team2"]
                 group = list(t1) + list(t2)
                 
-                # 📌 해당 경기가 혼복/잡복인지 판별
                 is_mixed = False
                 genders = [get_gender(x) for x in group]
                 if "M" in genders and "W" in genders:
@@ -267,7 +260,7 @@ def generate_schedule(am, aw, bm, bw):
                     b_name = base_name(p)
                     usage[b_name] += 1
                     if is_mixed:
-                        mixed_usage[b_name] += 1 # 혼복 카운트 증가
+                        mixed_usage[b_name] += 1
                         
                 results.append({"round": f"{r}R", "league": f"{league_name}리그", "team1": t1, "team2": t2, "note": m["type"]})
 
@@ -297,20 +290,28 @@ def generate_schedule(am, aw, bm, bw):
                 
     return results
 
+# 📌 텍스트('남복', '혼복' 등)로 표시되도록 계산 로직 업데이트
 def calculate_stats(schedule_data):
     stats = {}
     for row in schedule_data:
         r_num = row["round"]
         league = row["league"]
         t1, t2 = row["team1"], row["team2"]
+        
+        # '남복Match', '잡복(남3여1)' 등에서 앞 두 글자('남복', '혼복', '여복', '잡복')만 추출
+        match_type = row["note"][:2]
+        
         for p_raw in (t1 + t2):
             p_name = base_name(p_raw)
             if p_name not in stats:
-                stats[p_name] = {"League": league, "1R": 0, "2R": 0, "3R": 0, "4R": 0, "Total": 0}
-            if "1R" in r_num: stats[p_name]["1R"] += 1
-            elif "2R" in r_num: stats[p_name]["2R"] += 1
-            elif "3R" in r_num: stats[p_name]["3R"] += 1
-            elif "4R" in r_num: stats[p_name]["4R"] += 1
+                # 안 뛴 라운드는 '-'로 깔끔하게 초기화
+                stats[p_name] = {"League": league, "1R": "-", "2R": "-", "3R": "-", "4R": "-", "Total": 0}
+            
+            if "1R" in r_num: stats[p_name]["1R"] = match_type
+            elif "2R" in r_num: stats[p_name]["2R"] = match_type
+            elif "3R" in r_num: stats[p_name]["3R"] = match_type
+            elif "4R" in r_num: stats[p_name]["4R"] = match_type
+            
             stats[p_name]["Total"] += 1
     
     data = []
@@ -372,6 +373,7 @@ if st.sidebar.button("대진표 생성", type="primary"):
         st.subheader("선수별 출전 기록")
         df_stats = calculate_stats(data)
         
+        # 총합 색상 표시 기능은 유지
         def highlight_stats(val):
             if isinstance(val, int):
                 if val < 3: return 'background-color: #FFCDD2; color: black'
