@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import random
@@ -93,48 +92,61 @@ def build_groups_by_priority(pool, mixed_usage, max_groups=None):
     if max_groups is None:
         max_groups = len(pool) // 4
         
-    pool_copy = pool.copy()
     groups = []
-    
+    pool_copy = pool.copy()
+
     while len(groups) < max_groups and len(pool_copy) >= 4:
+        # 1. 출전이 가장 시급한(0순위) 선수를 무조건 매치의 기둥(Anchor)으로 세웁니다.
+        anchor = pool_copy.pop(0)
+        g_anchor = get_gender(anchor)
+        
+        group = [anchor]
+        
         men = [p for p in pool_copy if get_gender(p) == "M"]
         women = [p for p in pool_copy if get_gender(p) == "W"]
         
-        group = []
-        is_mixed = False
-        
-        if len(men) >= 2 and len(women) >= 2:
-            req_m, req_w = 2, 2
-            is_mixed = True
-        elif len(men) >= 4:
-            req_m, req_w = 4, 0
-        elif len(women) >= 4:
-            req_m, req_w = 0, 4
-        elif len(men) >= 3 and len(women) >= 1:
-            req_m, req_w = 3, 1
-            is_mixed = True
-        elif len(women) >= 3 and len(men) >= 1:
-            req_m, req_w = 1, 3
-            is_mixed = True
-        else:
-            group = pool_copy[:4]
-            for p in group: pool_copy.remove(p)
-            groups.append(group)
-            continue
-            
-        def extract(gender_list, count, mixed_flag):
-            if mixed_flag:
-                gender_list.sort(key=lambda x: (mixed_usage.get(base_name(x), 0), pool.index(x)))
+        def extract_players(p_list, count, is_mixed_target):
+            if is_mixed_target:
+                # 혼성 경기면 혼복 경험 적은 순, 그 다음 출전 적은 순
+                p_list.sort(key=lambda x: (mixed_usage.get(base_name(x), 0), pool.index(x)))
             else:
-                gender_list.sort(key=lambda x: pool.index(x))
+                # 동성 경기면 순수하게 전체 출전 적은 순
+                p_list.sort(key=lambda x: pool.index(x))
                 
-            extracted = gender_list[:count]
-            for p in extracted:
-                pool_copy.remove(p)
+            extracted = []
+            for _ in range(count):
+                if p_list:
+                    p = p_list.pop(0)
+                    extracted.append(p)
+                    if p in pool_copy:
+                        pool_copy.remove(p)
             return extracted
 
-        group.extend(extract(men, req_m, is_mixed))
-        group.extend(extract(women, req_w, is_mixed))
+        # 2. 기둥 선수의 성별에 맞춰 최적의 파트너들을 데려옵니다.
+        if g_anchor == "M":
+            if len(men) >= 1 and len(women) >= 2:
+                group.extend(extract_players(men, 1, True))
+                group.extend(extract_players(women, 2, True))
+            elif len(men) >= 3:
+                group.extend(extract_players(men, 3, False))
+            elif len(women) >= 3:
+                group.extend(extract_players(women, 3, True))
+            else:
+                group.extend(extract_players(pool_copy, 3, True))
+                
+        elif g_anchor == "W":
+            if len(women) >= 1 and len(men) >= 2:
+                group.extend(extract_players(women, 1, True))
+                group.extend(extract_players(men, 2, True))
+            elif len(women) >= 3:
+                group.extend(extract_players(women, 3, False))
+            elif len(men) >= 3:
+                group.extend(extract_players(men, 3, True))
+            else:
+                group.extend(extract_players(pool_copy, 3, True))
+        else:
+            group.extend(extract_players(pool_copy, 3, True))
+
         groups.append(group)
         
     leftovers = pool_copy
@@ -298,13 +310,11 @@ def calculate_stats(schedule_data):
         league = row["league"]
         t1, t2 = row["team1"], row["team2"]
         
-        # '남복Match', '잡복(남3여1)' 등에서 앞 두 글자('남복', '혼복', '여복', '잡복')만 추출
         match_type = row["note"][:2]
         
         for p_raw in (t1 + t2):
             p_name = base_name(p_raw)
             if p_name not in stats:
-                # 안 뛴 라운드는 '-'로 초기화
                 stats[p_name] = {"League": league, "1R": "-", "2R": "-", "3R": "-", "4R": "-", "Total": 0}
             
             if "1R" in r_num: stats[p_name]["1R"] = match_type
@@ -327,7 +337,7 @@ def calculate_stats(schedule_data):
 # ==========================================
 st.set_page_config(page_title="TELA Tennis Match", page_icon="🎾", layout="wide")
 
-st.title("🎾 TELA CLUB Random Match_WEB(v1.05)")
+st.title("🎾 TELA CLUB Random Match_WEB(v1.06)")
 st.markdown("모바일/PC 어디서든 사용 가능한 랜덤 매치 생성기입니다. (3경기 보장 / 4경기 제한)")
 
 # 사이드바 입력
@@ -373,7 +383,6 @@ if st.sidebar.button("대진표 생성", type="primary"):
         st.subheader("선수별 출전 기록")
         df_stats = calculate_stats(data)
         
-        # 총합 색상 표시 기능
         def highlight_stats(val):
             if isinstance(val, int):
                 if val < 3: return 'background-color: #FFCDD2; color: black'
