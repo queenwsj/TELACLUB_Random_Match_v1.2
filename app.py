@@ -88,66 +88,66 @@ def best_pairing_of_four(players4, teammate_used, opponent_used, mixed_partner_u
         if s < best_s: best_s = s; best = (t1, t2)
     return best
 
-def build_groups_by_priority(pool_sorted_by_priority, max_groups=None):
+def build_groups_by_priority(pool, mixed_usage, max_groups=None):
     if max_groups is None:
-        max_groups = len(pool_sorted_by_priority) // 4
+        max_groups = len(pool) // 4
         
+    pool_copy = pool.copy()
     groups = []
-    pool = pool_sorted_by_priority.copy()
-
-    while len(groups) < max_groups and len(pool) >= 4:
-        # 1. 출전이 가장 시급한 선수(리스트 첫 번째)를 기둥(Anchor)으로 무조건 꽂습니다.
-        anchor = pool.pop(0)
-        g_anchor = get_gender(anchor)
+    
+    # 이상적인 매치 구성 (혼복 > 남복/여복 > 잡복) 순으로 그룹을 짭니다.
+    while len(groups) < max_groups and len(pool_copy) >= 4:
+        men = [p for p in pool_copy if get_gender(p) == "M"]
+        women = [p for p in pool_copy if get_gender(p) == "W"]
         
-        group = [anchor]
+        group = []
+        is_mixed = False
         
-        men = [p for p in pool if get_gender(p) == "M"]
-        women = [p for p in pool if get_gender(p) == "W"]
-        
-        def extract_players(p_list, count):
-            extracted = []
-            for _ in range(count):
-                if p_list:
-                    p = p_list.pop(0)
-                    extracted.append(p)
-                    if p in pool:
-                        pool.remove(p)
+        # 1. 구성할 매치 타입 결정
+        if len(men) >= 2 and len(women) >= 2:
+            req_m, req_w = 2, 2
+            is_mixed = True
+        elif len(men) >= 4:
+            req_m, req_w = 4, 0
+        elif len(women) >= 4:
+            req_m, req_w = 0, 4
+        elif len(men) >= 3 and len(women) >= 1:
+            req_m, req_w = 3, 1
+            is_mixed = True
+        elif len(women) >= 3 and len(men) >= 1:
+            req_m, req_w = 1, 3
+            is_mixed = True
+        else:
+            # 잔여 인원 무작위 묶음 (Fallback)
+            group = pool_copy[:4]
+            for p in group: pool_copy.remove(p)
+            groups.append(group)
+            continue
+            
+        # 2. 결정된 매치 타입에 맞게 선수 차출 (혼복/잡복일 경우 혼복 경험 적은 순으로)
+        def extract(gender_list, count, mixed_flag):
+            if mixed_flag:
+                # 혼성 경기라면: 1순위 혼복 횟수(오름차순), 2순위 전체 출전 우선순위
+                gender_list.sort(key=lambda x: (mixed_usage.get(base_name(x), 0), pool.index(x)))
+            else:
+                # 동성 경기라면: 순수 전체 출전 우선순위만 고려
+                gender_list.sort(key=lambda x: pool.index(x))
+                
+            extracted = gender_list[:count]
+            for p in extracted:
+                pool_copy.remove(p)
             return extracted
 
-        # 2. 기둥 선수의 성별에 맞춰 이상적인 파트너들을 순서대로 데려옵니다.
-        if g_anchor == "M":
-            if len(men) >= 3:
-                group.extend(extract_players(men, 3)) # 4M 완성
-            elif len(men) >= 1 and len(women) >= 2:
-                group.extend(extract_players(men, 1))
-                group.extend(extract_players(women, 2)) # 2M2W 완성
-            elif len(women) >= 3:
-                group.extend(extract_players(women, 3)) # 잡복(1M3W)
-            else:
-                group.extend(extract_players(pool, 3))
-                
-        elif g_anchor == "W":
-            if len(women) >= 3:
-                group.extend(extract_players(women, 3)) # 4W 완성
-            elif len(women) >= 1 and len(men) >= 2:
-                group.extend(extract_players(women, 1))
-                group.extend(extract_players(men, 2)) # 2M2W 완성
-            elif len(men) >= 3:
-                group.extend(extract_players(men, 3)) # 잡복(3M1W)
-            else:
-                group.extend(extract_players(pool, 3))
-        else:
-            group.extend(extract_players(pool, 3))
-
+        group.extend(extract(men, req_m, is_mixed))
+        group.extend(extract(women, req_w, is_mixed))
         groups.append(group)
         
-    leftovers = pool
+    leftovers = pool_copy
     return groups, leftovers
 
-def make_matches(pool, teammate_used, opponent_used, mixed_partner_used, round_teammate_used, round_opponent_used, round_mixed_partner_used):
+def make_matches(pool, mixed_usage, teammate_used, opponent_used, mixed_partner_used, round_teammate_used, round_opponent_used, round_mixed_partner_used):
     matches = []
-    groups, leftovers = build_groups_by_priority(pool)
+    groups, leftovers = build_groups_by_priority(pool, mixed_usage)
     
     for g in groups:
         random.shuffle(g)
@@ -156,7 +156,7 @@ def make_matches(pool, teammate_used, opponent_used, mixed_partner_used, round_t
         matches.append({"team1": t1, "team2": t2, "type": match_label(g)})
     return matches, leftovers
 
-def build_event_games(players, usage, min_games=3, max_games=4):
+def build_event_games(players, usage, mixed_usage, min_games=3, max_games=4):
     add = {}; room = {}
     for p in players:
         current = usage.get(p, 0)
@@ -204,7 +204,7 @@ def build_event_games(players, usage, min_games=3, max_games=4):
         
         active.sort(key=lambda x: (-remaining[x], usage[x], random.random()))
         
-        groups, _ = build_groups_by_priority(active, max_groups=1)
+        groups, _ = build_groups_by_priority(active, mixed_usage, max_groups=1)
         if groups:
             chosen = groups[0]
         else:
@@ -242,6 +242,7 @@ def generate_schedule(am, aw, bm, bw):
     for league_name, players in leagues.items():
         if not players: continue
         usage = {p: 0 for p in players}
+        mixed_usage = {p: 0 for p in players} # 📌 혼성 매치 횟수 추적기 추가
         teammate_used = set(); opponent_used = set(); mixed_partner_used = set()
 
         for r in range(1, 4):
@@ -250,23 +251,48 @@ def generate_schedule(am, aw, bm, bw):
             random.shuffle(order)
             order.sort(key=lambda x: usage.get(x, 0))
             
-            round_matches, _ = make_matches(order, teammate_used, opponent_used, mixed_partner_used, round_teammate_used, round_opponent_used, round_mixed_partner_used)
+            round_matches, _ = make_matches(order, mixed_usage, teammate_used, opponent_used, mixed_partner_used, round_teammate_used, round_opponent_used, round_mixed_partner_used)
             
             for m in round_matches:
                 t1, t2 = m["team1"], m["team2"]
-                for p in (t1+t2): usage[base_name(p)] += 1
+                group = list(t1) + list(t2)
+                
+                # 📌 해당 경기가 혼복/잡복인지 판별
+                is_mixed = False
+                genders = [get_gender(x) for x in group]
+                if "M" in genders and "W" in genders:
+                    is_mixed = True
+                    
+                for p in group:
+                    b_name = base_name(p)
+                    usage[b_name] += 1
+                    if is_mixed:
+                        mixed_usage[b_name] += 1 # 혼복 카운트 증가
+                        
                 results.append({"round": f"{r}R", "league": f"{league_name}리그", "team1": t1, "team2": t2, "note": m["type"]})
 
-        games = build_event_games(players, usage)
+        games = build_event_games(players, usage, mixed_usage)
         games = decorate_event_games(games, usage)
         if games:
             round_teammate_used = set(); round_opponent_used = set(); round_mixed_partner_used = set()
             for g in games:
                 t1, t2 = best_pairing_of_four(g, teammate_used, opponent_used, mixed_partner_used, round_teammate_used, round_opponent_used, round_mixed_partner_used)
                 commit_match(t1, t2, teammate_used, opponent_used, mixed_partner_used, round_teammate_used, round_opponent_used, round_mixed_partner_used)
-                for p in (t1+t2): usage[base_name(p)] += 1
+                
+                group = list(t1) + list(t2)
+                is_mixed = False
+                genders = [get_gender(x) for x in group]
+                if "M" in genders and "W" in genders:
+                    is_mixed = True
+                    
+                for p in group:
+                    b_name = base_name(p)
+                    usage[b_name] += 1
+                    if is_mixed:
+                        mixed_usage[b_name] += 1
+                        
                 note = match_label(g)
-                if any("(중복)" in x for x in (t1+t2)): note += " (중복)"
+                if any("(중복)" in x for x in group): note += " (중복)"
                 results.append({"round": "4R (이벤트)", "league": f"{league_name}리그", "team1": t1, "team2": t2, "note": note})
                 
     return results
@@ -300,7 +326,7 @@ def calculate_stats(schedule_data):
 # ==========================================
 st.set_page_config(page_title="TELA Tennis Match", page_icon="🎾", layout="wide")
 
-st.title("🎾 TELA CLUB Random Match_Web(v1.4)")
+st.title("🎾 TELA CLUB Random Match")
 st.markdown("모바일/PC 어디서든 사용 가능한 랜덤 매치 생성기입니다. (3경기 보장 / 4경기 제한)")
 
 # 사이드바 입력
@@ -316,7 +342,6 @@ with col2:
 if st.sidebar.button("대진표 생성", type="primary"):
     data = generate_schedule(am, aw, bm, bw)
     
-    # 데이터프레임 변환 (화면 표시용)
     display_data = []
     for d in data:
         display_data.append({
@@ -330,13 +355,11 @@ if st.sidebar.button("대진표 생성", type="primary"):
         })
     df_matches = pd.DataFrame(display_data)
 
-    # 1. 대진표 탭
     tab1, tab2 = st.tabs(["📋 대진표", "📊 출전 현황"])
     
     with tab1:
         st.subheader("경기 매치업")
         
-        # 라운드별 스타일링을 위한 함수
         def highlight_rows(row):
             if "A리그" in row["리그"]:
                 return ['background-color: #C8E6C9; color: black'] * len(row)
@@ -345,22 +368,19 @@ if st.sidebar.button("대진표 생성", type="primary"):
 
         st.dataframe(df_matches.style.apply(highlight_rows, axis=1), use_container_width=True, height=600)
 
-    # 2. 출전 현황 탭
     with tab2:
         st.subheader("선수별 출전 기록")
         df_stats = calculate_stats(data)
         
         def highlight_stats(val):
             if isinstance(val, int):
-                if val < 3: return 'background-color: #FFCDD2; color: black' # 빨강
-                if val == 3: return 'background-color: #E8F5E9; color: black' # 초록
-                if val >= 4: return 'background-color: #FFF9C4; color: black' # 노랑
+                if val < 3: return 'background-color: #FFCDD2; color: black'
+                if val == 3: return 'background-color: #E8F5E9; color: black'
+                if val >= 4: return 'background-color: #FFF9C4; color: black'
             return ''
 
         st.dataframe(df_stats.style.applymap(highlight_stats, subset=["총합"]), use_container_width=True)
 
-    # 엑셀 다운로드 버튼
-    # 메모리 내에서 엑셀 파일 생성
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_matches.to_excel(writer, sheet_name='대진표', index=False)
