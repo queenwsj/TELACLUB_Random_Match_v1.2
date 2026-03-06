@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import random
@@ -398,15 +397,34 @@ if st.sidebar.button("대진표 생성", type="primary"):
         st.subheader("선수별 출전 기록")
         df_stats = calculate_stats(data)
         
-        def highlight_stats(val):
-            if isinstance(val, int):
-                if val < 3: return 'background-color: #FFCDD2; color: black'
-                if val == 3: return 'background-color: #E8F5E9; color: black'
-                if val >= 4: return 'background-color: #FFF9C4; color: black'
-            return ''
+        # 📌 그룹별 배경색 & 4경기(총합) 강조 로직 적용
+        def highlight_stats_row(row):
+            name = row['이름']
+            # 그룹별 연한 파스텔 톤 배경색 설정
+            if name.startswith('AM'):
+                base_style = 'background-color: #E8F5E9; color: black'  # A남: 연두
+            elif name.startswith('AW'):
+                base_style = 'background-color: #FCE4EC; color: black'  # A여: 연분홍
+            elif name.startswith('BM'):
+                base_style = 'background-color: #E3F2FD; color: black'  # B남: 연파랑
+            elif name.startswith('BW'):
+                base_style = 'background-color: #FFF3E0; color: black'  # B여: 연주황
+            else:
+                base_style = ''
 
-        # 표 높이를 700으로 늘려 스크롤을 시원하게 해결했습니다.
-        st.dataframe(df_stats.style.applymap(highlight_stats, subset=["총합"]), use_container_width=True, height=700)
+            styles = [base_style] * len(row)
+
+            # '총합' 열에만 특별한 스타일 오버라이드
+            total_idx = row.index.get_loc('총합')
+            if row['총합'] >= 4:
+                styles[total_idx] = 'background-color: #FFF176; color: black; font-weight: bold' # 4경기는 진한 노란색
+            elif row['총합'] < 3:
+                styles[total_idx] = 'background-color: #FFCDD2; color: black; font-weight: bold' # 3경기 미만은 빨간색 (오류/경고용)
+
+            return styles
+
+        # 행 단위 스타일 함수를 적용
+        st.dataframe(df_stats.style.apply(highlight_stats_row, axis=1), use_container_width=True, height=700)
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
